@@ -1,1 +1,18 @@
-
+{
+    "testnet_eth_sepolia": {
+        "RPC_URL": "https://eth-sepolia.public.blastapi.io",
+        "CHAIN_ID": 11155111
+    },
+    "testetnet_plume": {
+        "RPC_URL": "https://testnet-rpc.plume.org",
+        "CHAIN_ID": 98867
+    },
+    "testetnet_arbitrum": {
+        "RPC_URL": "https://sepolia-rollup.arbitrum.io/rpc",
+        "CHAIN_ID": 421614
+    },
+    "testetnet_monad": {
+        "RPC_URL": "https://testnet-rpc.monad.xyz",
+        "CHAIN_ID": 10143
+    }
+}
