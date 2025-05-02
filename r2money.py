@@ -2,10 +2,11 @@
 Author: sanford courageux_san@wechat.com
 Date: 2025-05-02 13:22:36
 LastEditors: sanford courageux_san@wechat.com
-LastEditTime: 2025-05-02 17:22:34
+LastEditTime: 2025-05-02 17:59:45
 FilePath: /web3_script/web3_drop_script/script_py/r2money2.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 '''
+import time
 import json
 import requests
 from web3 import Web3
@@ -55,15 +56,17 @@ def approve_tokens(ws: object, pk, token_addr, target_addr):
     approve_token = token_contract.functions.allowance(sender_addr, target_addr).call()
 
     if approve_token == 0:
+        gas_estimate = token_contract.functions.approve(target_addr, 2**256 - 1).estimate_gas({
+            'from': sender_addr,
+            'gasPrice': int(w3.eth.gas_price * Decimal(1.1)),
+            'nonce': int(w3.eth.get_transaction_count(sender_addr))
+        })
+
         approve_tx = token_contract.functions.approve(target_addr, 2**256 - 1).build_transaction({
                 'chainId': w3.eth.chain_id,
                 'from': sender_addr,
                 'gasPrice': int(w3.eth.gas_price * Decimal(1.1)),
-                'gas': token_contract.functions.approve(target_addr, 2**256 - 1).estimate_gas({
-                    'from': sender_addr,
-                    'gasPrice': int(w3.eth.gas_price * Decimal(1.1)),
-                    'nonce': int(w3.eth.get_transaction_count(sender_addr))
-                }),
+                'gas': gas_estimate,
                 'nonce': int(w3.eth.get_transaction_count(sender_addr))
             })
 
@@ -120,6 +123,10 @@ def transfer_tokens(w3: object, pk: str, target_addr: str, data):
     gas_fee_eth = (gas_estimate * gas_price_gwei) * 10**-9
     print(f"Estimated gas fee in ETH: {gas_fee_eth}")
 
+    # 设置最大重试次数和间隔
+    max_retries = 10
+    retry_interval = 10  # 秒
+
     if gas_fee_eth <= 0.006:
         tx = {
             'chainId': w3.eth.chain_id,
@@ -130,15 +137,20 @@ def transfer_tokens(w3: object, pk: str, target_addr: str, data):
             'gas': w3.eth.estimate_gas({'from': sender_addr, 'to': target_addr, 'data': data}),
             'nonce': int(w3.eth.get_transaction_count(sender_addr))
         }
+
         tx_hash = w3.eth.send_raw_transaction(w3.eth.account.sign_transaction(tx, pk).raw_transaction)
         receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-        if receipt.status == 1:
-            print("✅ transfer_tokens Transaction Successful")
+
+        if receipt is not None:
+            if receipt.status == 1:
+                print("✅ transfer_tokens Transaction Successful")
+            else:
+                print("❌ transfer_tokens Transaction Failed")
         else:
-            print("❌ transfer_tokens Transaction Failed")
+            print("Transaction not yet mined, waiting...")
+            time.sleep(retry_interval)
     else:
-        print("❌ Gas Fee is high")
-        exit()
+        print("Transaction not confirmed after maximum retries.")
 
 
 def usdc_to_rusd(w3: object, pk):
@@ -205,15 +217,21 @@ def rusd_liq_srusd(w3: object, pk):
 
 
 if __name__ == "__main__":
-    conf = load_config_rpc(rpc_name="testnet_eth_sepolia")
-    private_keys = load_private_keys(pk_path='data/private_keys/r2money.txt')
+    rpcs = ["testnet_eth_sepolia", "testetnet_plume", "testetnet_arbitrum", "testetnet_monad"]
 
-    w3 = set_w3(conf)
+    for rpc_name in rpcs:
+        conf = load_config_rpc(rpc_name=rpc_name)
+        private_keys = load_private_keys(pk_path='data/private_keys/r2money.txt')
 
-    for index, pk in enumerate(private_keys):
-        print(f"账号 index: {index}")
-        usdc_to_rusd(w3, pk)
-        rusd_to_srusd(w3, pk)
-        rusd_liq_srusd(w3, pk)
+        w3 = set_w3(conf)
+
+        for index, pk in enumerate(private_keys):
+            print(f"账号 index: {index + 1}, 链: {rpc_name}")
+            try:
+                usdc_to_rusd(w3, pk)
+                rusd_to_srusd(w3, pk)
+                rusd_liq_srusd(w3, pk)
+            except Exception as e:
+                print(f"账号 index: {index + 1} 出错: {e}")
 
 
